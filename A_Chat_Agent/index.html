@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Agent Chat - WeChat Style</title>
+  <style>
+    /* === 整体布局 === */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #ebebeb;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .chat-container {
+      width: 420px;
+      height: 700px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.15);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 顶部栏，模仿微信 */
+    .chat-header {
+      height: 50px;
+      background: #ededed;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      border-bottom: 1px solid #dcdcdc;
+    }
+
+    /* 消息区域 */
+    .chat-body {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      background: #e5e5e5;
+    }
+
+    .message-row {
+      display: flex;
+      margin-bottom: 8px;
+    }
+
+    .message-row.user {
+      justify-content: flex-end;
+    }
+
+    .message-row.agent {
+      justify-content: flex-start;
+    }
+
+    .bubble {
+      max-width: 70%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      line-height: 1.4;
+      word-wrap: break-word;
+    }
+
+    /* 用户气泡：右侧绿色（类似微信自己） */
+    .bubble.user {
+      background: #95ec69;
+      border-top-right-radius: 0;
+    }
+
+    /* Agent 气泡：左侧白色 */
+    .bubble.agent {
+      background: #ffffff;
+      border-top-left-radius: 0;
+    }
+
+    /* 底部输入栏 */
+    .chat-footer {
+      height: 60px;
+      border-top: 1px solid #dcdcdc;
+      background: #f7f7f7;
+      display: flex;
+      align-items: center;
+      padding: 8px;
+    }
+
+    .chat-input {
+      flex: 1;
+      height: 40px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+      padding: 0 8px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .chat-send {
+      width: 70px;
+      height: 40px;
+      margin-left: 8px;
+      border-radius: 4px;
+      border: none;
+      background: #07c160;
+      color: #fff;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .chat-send:disabled {
+      background: #9bd9b7;
+      cursor: default;
+    }
+
+    .status-bar {
+      font-size: 11px;
+      color: #888;
+      text-align: center;
+      padding: 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">Agent 小助手</div>
+    <div class="status-bar" id="statusBar">已连接本地 Agent</div>
+    <div class="chat-body" id="chatBody">
+      <!-- 消息气泡会插到这里 -->
+    </div>
+    <div class="chat-footer">
+      <input
+        id="chatInput"
+        class="chat-input"
+        type="text"
+        placeholder="输入消息，按回车发送…"
+      />
+      <button id="sendBtn" class="chat-send">发送</button>
+    </div>
+  </div>
+
+  <script>
+    const chatBody = document.getElementById("chatBody");
+    const chatInput = document.getElementById("chatInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const statusBar = document.getElementById("statusBar");
+
+    const THREAD_ID = "user_001"; // 简单写死一个，会话 id
+
+    function appendMessage(role, text) {
+      const row = document.createElement("div");
+      row.className = "message-row " + (role === "user" ? "user" : "agent");
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble " + (role === "user" ? "user" : "agent");
+      bubble.textContent = text;
+
+      row.appendChild(bubble);
+      chatBody.appendChild(row);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const text = chatInput.value.trim();
+      if (!text) return;
+
+      // 先把用户消息插入右侧气泡
+      appendMessage("user", text);
+      chatInput.value = "";
+      chatInput.focus();
+
+      // 按钮禁用，防止重复点击
+      sendBtn.disabled = true;
+      statusBar.textContent = "Agent 思考中…";
+
+      try {
+        const resp = await fetch("/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: text,
+            thread_id: THREAD_ID,
+          }),
+        });
+
+        if (!resp.ok) {
+          throw new Error("HTTP error " + resp.status);
+        }
+
+        const data = await resp.json();
+        appendMessage("agent", data.reply || "[Agent 无回复]");
+      } catch (err) {
+        console.error(err);
+        appendMessage("agent", "出错了：" + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        statusBar.textContent = "已连接本地 Agent";
+      }
+    }
+
+    // 按钮点击发送
+    sendBtn.addEventListener("click", sendMessage);
+
+    // 回车发送
+    chatInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
+
+    // 给个初始欢迎语
+    appendMessage("agent", "你好，我是本地运行的 Agent 小助手，可以像微信一样和我聊天。");
+  </script>
+</body>
+</html>
